@@ -8,11 +8,25 @@ import shaper
 from os import system, name 
 from time import sleep 
 import sys
-  
+import json
+import codecs  
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpus[0], True)
 
+
+from lorem.text import TextLorem
+
+lorem = TextLorem(srange=(1,2))
+used_names = []
+def create_name(species_name = '', original = False):
+    if original:
+        while True:
+            name = lorem.sentence().replace('.', '')
+            if name not in used_names:
+                return species_name + name
+    else:
+        return species_name + lorem.sentence().replace('.', '')
 
 # Print iterations progress
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
@@ -48,28 +62,41 @@ def clear():
 #TODO checking if previous moves were not the same  DONE
 #TODO fitness from both games                       DONE
 #TODO genetic reinforcment learning                 DONE
-#TODO make it work                              not done
+#TODO make it work                              maybe?
 
 
 def print_board(positions):
+    """
+    Prints the checkers board
+    @params:
+        positions   - Required  : current positions of pices on board (Int[])
+    """
     odd = True
     count = 1
+    board = '\r'
     for element in positions:
- 
+        
         if odd:
-            print("{}  {}  ".format(0, element), end = "")
-            count += 1
+            board += "{}  {}  ".format(0, element)
         else:
-            print("{}  {}  ".format(element, 0), end = "")
-            count += 1
+            board += "{}  {}  ".format(element, 0)
+        count += 1
  
         if count > 4:
             count = 1
             odd = not odd
-            print("\n")
+            board += "\n"
+
+    print(board, end='\r')
 
 
 def check_if_move_is_continous(previous_moves, move):
+    """
+    Function that checks if the player is not repeating moves
+    @params:
+        previous_moves - Required  : list of previous moves (Int[][])
+        move           - Required  : current move (Int[])  
+    """
     same_moves = 0
     #print(previous_moves, move)
     for prev in previous_moves:
@@ -81,6 +108,14 @@ def check_if_move_is_continous(previous_moves, move):
         return False
 
 def create_numerical_board(prev_board, new_board):
+    """
+    Function that creates input for Neurak Network,
+    which is a list of all positions of pieces on thee board
+    before and and after move
+    @params:
+        previous_moves - Required  : list of previous moves (Int[][])
+        move           - Required  : current move (Int[])  
+    """
     numerical_board = [0 for _ in range(64)]
     for piece in prev_board.pieces:
         
@@ -111,6 +146,11 @@ def create_numerical_board(prev_board, new_board):
     return np.array([np.array(numerical_board)])
 
 def create_numerical_board_to_print(new_board):
+    """
+    Changes NN inputso that it can be printed
+    @params:
+        previous_moves - Required  : list of previous moves (Object)
+    """
     numerical_board = [0 for _ in range(32)]
     for piece in new_board.pieces:
         
@@ -120,6 +160,11 @@ def create_numerical_board_to_print(new_board):
     return np.array(numerical_board)
 
 class AiModule(object):
+    """
+    Class responsible for training the Neural Network, 
+    storing all players and 
+    
+    """
     def __init__(self, N_PLAYERS = 20, N_KIDS = 5, N_OF_ITERATIONS = 30):
         self.player_type = ['white', 'black']
         self.N_PLAYERS = N_PLAYERS 
@@ -127,17 +172,17 @@ class AiModule(object):
         self.N_KIDS = N_KIDS
         players = [np.array(self.get_model().get_weights()) for _ in range(self.N_PLAYERS)]
         for player_index in range(len(players)):
-            players[player_index] = [copy.deepcopy(players[player_index]), shaper.get_biases(players[player_index]), 0]
+            players[player_index] = [copy.deepcopy(players[player_index]), shaper.get_biases(players[player_index]), 0, create_name(original=True)]
         self.players = players
 
     def get_model(self):
         model = tf.keras.models.Sequential()
         model.add(tf.keras.layers.Input(64))
-        model.add(tf.keras.layers.Dense(128, activation = 'relu'))
+        model.add(tf.keras.layers.Dense(256, activation = 'relu'))
         model.add(tf.keras.layers.Dense(128, activation = 'relu'))
         model.add(tf.keras.layers.Dense(64, activation = 'relu'))
         model.add(tf.keras.layers.Dense(1, activation = 'sigmoid'))
-        model.compile(loss = 'mse', optimizer = 'adam')
+        model.compile(loss = 'mse', optimizer = 'adadelta')
         return model
     
     def play(self, players, game_index = None, show_game = False):
@@ -150,7 +195,6 @@ class AiModule(object):
             if show_game:
                 clear()
                 print_board(create_numerical_board_to_print(game.board))
-                print('number of game:', game_index)
                 sleep(0.1)
             curr_player = game.whose_turn()
             game.move(best_one)
@@ -160,13 +204,21 @@ class AiModule(object):
         if show_game:
             clear()
             print_board(create_numerical_board_to_print(game.board))
-            print('number of game:', game_index)
         return game.get_winner(), 1.0, time.time() - start_time
     
+    def save_population(self, path = './training/checkpoint.json'):
+        population = {}
+        for player in self.players:
+            population[player[3]] = {'weights': shaper.to_list(player[0]),
+                                     'biases':  shaper.to_list(player[1]),
+                                     'fitness': player[2]}
+        json.dump(population, codecs.open(path, 'w', encoding='utf-8'), separators=(',', ':'))
+
     
-    
-    def genetic_learning(self, show_games = False):
+    def genetic_learning(self, show_games = False, save_checkpoint = True):
         total_n_of_games = self.N_PLAYERS * (self.N_KIDS + 1) * (self.N_PLAYERS * (self.N_KIDS + 1) - 1)
+
+        #learn_start_time = time.time()
 
         for iteration in range(self.N_OF_ITERATIONS):
             current_players = []
@@ -174,124 +226,51 @@ class AiModule(object):
                 current_players.append(copy.deepcopy(player))
                 weights = player[0]
                 biases = player[1]
+                name = player[3]
                 for _ in range(self.N_KIDS):
                     new_weights, new_biases = shaper.evolve(weights, biases)
-                    current_players.append([new_weights, new_biases, 0])
+                    current_players.append([new_weights, new_biases, 0, create_name(species_name = name)])
             
-            current_game = 1
+            current_game = 0
+            times = []
             for player_index in range(len(current_players)):
                 for enemy_index in range(len(current_players)):
                     if player_index != enemy_index:
+                        iteration_start = time.time()
+                        ########################################################
                         player_white = self.get_model()
                         player_white.set_weights(np.array(current_players[player_index][0]))
                         player_black = self.get_model()
                         player_black.set_weights(np.array(current_players[enemy_index][0]))
-                        winner, fitness, _ = self.play([player_white, player_black])
+
+                        winner, fitness, _ = self.play([player_white, player_black], show_game=False)
                         if winner == 1:
                             current_players[player_index][2] += fitness
                         elif winner == 2:
                             current_players[enemy_index][2] += fitness
                         del player_white, player_black
                         current_game += 1
-                        printProgressBar(current_game,total_n_of_games, prefix = 'Progress:', suffix = 'Complete', length = 50)
-                        
+                        #########################################################
+                        times.append((time.time() - iteration_start)/60)
+                        approximated_wait_time = np.mean(np.array(times)) * (total_n_of_games - len(times))
+                        printProgressBar(current_game,total_n_of_games, prefix = 'Progress:', suffix = 'Complete, approximated iteration time left: ' + "%.2f"%approximated_wait_time + ' min', length = 50)
+
+
             players_sorted = [player for player in sorted(current_players, key = lambda x: x[2], reverse=True)]      
             self.players = copy.deepcopy(players_sorted[:self.N_PLAYERS])
             print('iteration: ', iteration, 'winning fitness: ',self.players[0][2])
-            for player_index in self.players:
+            for player_index in range(len(self.players)):
+                print(self.players[player_index][2])
                 self.players[player_index][2] = 0  
-            
-         
+
+            if save_checkpoint:
+                self.save_population()
+                print('checkpoint saved')
 
 
-
-
-
-        # games = [[[0,0],[0,0]] for _ in range(int(self.N_PLAYERS/2))]
-        # for iteration in range(self.N_OF_ITERATIONS):
-        #     print('iteration: ', iteration)
-        #     print('0%')
-        #     for game_index in range(int(self.N_PLAYERS/2)):
-        #         if np.random.uniform(0,1) < 0.1 and show_games:
-        #             winner, fitness, game_time = self.play([self.players[2*game_index], self.players[2*game_index + 1]], game_index = game_index, show_game=True)
-        #         else:
-        #             winner, fitness, game_time = self.play([self.players[2*game_index], self.players[2*game_index + 1]], game_index = game_index)
-        #         games[game_index][0][0] = winner
-        #         games[game_index][0][1] = fitness
-        #         if winner != None:
-        #             print('winner:', self.player_type[winner - 1], '| fitness:', fitness, '| time:', game_time)
-        #         else:
-        #             print('winner:', 'None', '| fitness:', fitness, '| time:', game_time)
-        #         sys.stdout.flush()  
-
-        #     print('50%')      
-
-        #     for game_index in range(int(self.N_PLAYERS/2)):
-        #         if np.random.uniform(0,1) < 0.1 and show_games:
-        #             winner, fitness, game_time = self.play([self.players[2*game_index + 1], self.players[2*game_index ]], game_index = game_index, show_game=True)
-        #         else:
-        #             winner, fitness, game_time = self.play([self.players[2*game_index + 1], self.players[2*game_index ]], game_index = game_index)
-        #         games[game_index][1][0] = winner
-        #         games[game_index][1][1] = fitness
-        #         if winner != None:
-        #             print('winner:', self.player_type[winner - 1], '| fitness:', fitness, '| time:', game_time)
-        #         else:
-        #             print('winner:', 'None', '| fitness:', fitness, '| time:', game_time)
-                
-        #     parents = []
-        #     for game_index in range(len(games)):
-        #         if games[game_index][0][0] == games[game_index][1][0] == 1:
-        #             if games[game_index][0][1] > games[game_index][1][1]:
-        #                 parents.append(self.players[2*game_index])
-        #                 continue
-        #             else:
-        #                 parents.append(self.players[2*game_index + 1])
-        #                 continue
-        #         elif games[game_index][0][0] == games[game_index][1][0] == 2:
-        #             if games[game_index][0][1] > games[game_index][1][1]:
-        #                 parents.append(self.players[2*game_index + 1])
-        #                 continue
-        #             else:
-        #                 parents.append(self.players[2*game_index])
-        #                 continue
-        #         elif games[game_index][0][0] == 1 and  games[game_index][1][0] == 2 or games[game_index][0][0] == 1 and  games[game_index][1][0] == None:
-        #             parents.append(self.players[2*game_index])
-        #             continue
-        #         elif games[game_index][0][0] == 2 and  games[game_index][1][0] == 1 or games[game_index][0][0] == 2 and  games[game_index][1][0] == None:
-        #             parents.append(self.players[2*game_index + 1])
-        #             continue
-        #         elif games[game_index][0][0] == None and  games[game_index][1][0] == None:
-        #             parents.append(self.players[2*game_index + random.randint(0,1)])
-        #             continue
-                
-        #     print('100%')
-        #     new_players = []
-        #     print('crossover and mutation')
-        #     for _ in range(self.N_PLAYERS - len(parents)):
-        #         parent1 = parents[random.randint(0,len(parents) - 1)]
-        #         parent2 = parents[random.randint(0,len(parents) - 1)]
-        #         weights = parent1.get_weights()
-        #         for i in range(len(weights)):
-        #             if np.random.uniform(0, 1) > 0.5:
-        #                 weights[i] = parent2.get_weights()[i]
-        #         new_baby = self.get_model()
-        #         weights = y4ndhi(weights)
-        #         new_baby.set_weights(weights)
-        #         new_players.append(tf.keras.models.clone_model(new_baby))
-        #         del new_baby
-        #     for parent in parents:
-        #         new_players.append(tf.keras.models.clone_model(parent))
-        #     del self.players
-        #     random.shuffle(new_players)
-        #     self.players = new_players
-        #     self.players[0].save_weights('./training/weights')
-
-
-
-
-
+        
           
-training = AiModule(N_PLAYERS=10,N_KIDS=2 ,N_OF_ITERATIONS=50)
+training = AiModule(N_PLAYERS=10,N_KIDS = 4 ,N_OF_ITERATIONS=20)
 training.genetic_learning()
 
 

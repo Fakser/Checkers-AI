@@ -178,7 +178,7 @@ class AiModule(object):
     def get_model(self):
         model = tf.keras.models.Sequential()
         model.add(tf.keras.layers.Input(64))
-        model.add(tf.keras.layers.Dense(256, activation = 'relu'))
+        model.add(tf.keras.layers.Dense(128, activation = 'relu'))
         model.add(tf.keras.layers.Dense(128, activation = 'relu'))
         model.add(tf.keras.layers.Dense(64, activation = 'relu'))
         model.add(tf.keras.layers.Dense(1, activation = 'sigmoid'))
@@ -253,7 +253,8 @@ class AiModule(object):
                         #########################################################
                         times.append((time.time() - iteration_start)/60)
                         approximated_wait_time = np.mean(np.array(times)) * (total_n_of_games - len(times))
-                        printProgressBar(current_game,total_n_of_games, prefix = 'Progress:', suffix = 'Complete, approximated iteration time left: ' + "%.2f"%approximated_wait_time + ' min', length = 50)
+                        #printProgressBar(current_game,total_n_of_games, prefix = 'Progress:', suffix = 'Complete, approximated iteration time left: ' + "%.2f"%approximated_wait_time + ' min', length = 50)
+                print('finished player' + str(player_index) +  'approximated iteration time left: ' + "%.2f"%approximated_wait_time + ' min')
 
 
             players_sorted = [player for player in sorted(current_players, key = lambda x: x[2], reverse=True)]      

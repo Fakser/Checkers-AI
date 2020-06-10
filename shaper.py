@@ -10,29 +10,24 @@ def shape_of_you(array):
             size += 1      
     return size
 
-def use_this_gospel(array):
-    mutations = []
+def get_biases(array):
+    biases = []
     for var in array:
         var = np.array(var)
         if len(var.shape) >= 1:
-            mutations.append(use_this_gospel(var))
+            biases.append(get_biases(var))
         else:
-            mutations.append(np.random.uniform(0,1))       
-    return np.array(mutations)
+            biases.append(np.random.uniform(-10,10))       
+    return np.array(biases)
 
-def y4ndhi(array, size = None):
-    if size == None:
-        size = shape_of_you(array)
+def evolve(weights, biases):
     
-    #T1 = 1/np.math.sqrt(2*size)
-    #T2 = 1/np.math.sqrt(2*np.math.sqrt(size))
-    
-    for i,var in enumerate(array):
+    for i,var in enumerate(weights):
         var = np.array(var)
-        if len(var.shape) == 1:
-            array[i] = y4ndhi(var,size)
+        if len(var.shape) >= 1:
+            weights[i], biases[i] = evolve(var,biases[i])
         else:
-            if np.random.uniform(0,1) <= 0.0001:
-                array[i] = array[i] + np.random.uniform(-0.1, 0.1)    
-    return np.array(array)
+            biases[i] = biases[i] * np.math.exp(np.random.uniform(0,1))
+            weights[i] = weights[i] + biases[i] * np.random.uniform(0,1)    
+    return np.array(weights), np.array(biases)
 

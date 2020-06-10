@@ -27,7 +27,7 @@ def evolve(weights, biases):
         if len(var.shape) >= 1:
             weights[i], biases[i] = evolve(var,biases[i])
         else:
-            biases[i] = biases[i] * np.math.exp(0.1*np.random.uniform(0,1))
+            biases[i] = biases[i] * np.math.exp(0.001*np.random.uniform(0,1))
             weights[i] = weights[i] + biases[i] * np.random.uniform(0,1)    
     return np.array(weights), np.array(biases)
 

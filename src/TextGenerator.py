@@ -1,4 +1,4 @@
-from Controller import *
+from src.Controller import *
 
 def create_name(species_name = '', original = False):
     if original:

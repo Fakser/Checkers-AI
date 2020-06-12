@@ -1,4 +1,4 @@
-from Controller import *
+from src.Controller import *
 
 def check_if_move_is_continous(previous_moves, move):
     """

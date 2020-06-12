@@ -1,7 +1,7 @@
-from Controller import *
-from Printing import *
-from Numerical import *
-from TextGenerator import *
+from src.Controller import *
+from src.Printing import *
+from src.Numerical import *
+from src.TextGenerator import *
 
 
 class AiModule(object):

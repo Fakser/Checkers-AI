@@ -1,10 +1,10 @@
-from Game.game import Game
+from src.Game.game import Game
 import random
 import numpy as np 
 import tensorflow as tf
 import copy
 import time
-import shaper
+from src import shaper
 from os import system, name 
 from time import sleep 
 from lorem.text import TextLorem

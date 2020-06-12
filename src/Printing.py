@@ -1,4 +1,4 @@
-from Controller import *
+from src.Controller import *
 
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """

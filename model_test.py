@@ -528,13 +528,13 @@ while game.is_over() == False:
 # lorem = TextLorem(srange=(1,1))
 # print(lorem.sentence().replace('.', ''))
 
-import shaper, numpy
-a = [0.8, 0.5, 0.6,[[0.2],[0.2, 0.3, 0.4], 0.4]]
-b = shaper.get_biases(a)
-a, b = shaper.evolve(a, b)
-a, b = shaper.evolve(a, b)
-a, b = shaper.evolve(a, b)
-a, b = shaper.evolve(a, b)
+# import shaper, numpy
+# a = [0.8, 0.5, 0.6,[[0.2],[0.2, 0.3, 0.4], 0.4]]
+# b = shaper.get_biases(a)
+# a, b = shaper.evolve(a, b)
+# a, b = shaper.evolve(a, b)
+# a, b = shaper.evolve(a, b)
+# a, b = shaper.evolve(a, b)
 
-print(shaper.to_list(a))
+# print(shaper.to_list(a))
 

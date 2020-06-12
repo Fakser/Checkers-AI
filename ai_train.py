@@ -10,10 +10,13 @@ from time import sleep
 import sys
 import json
 import codecs  
+import gc
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpus[0], True)
 
+gc.enable()
+#gc.set_debug(gc.DEBUG_LEAK)
 
 from lorem.text import TextLorem
 
@@ -24,9 +27,9 @@ def create_name(species_name = '', original = False):
         while True:
             name = lorem.sentence().replace('.', '')
             if name not in used_names:
-                return species_name + name
+                return species_name + ' ' + name
     else:
-        return species_name + lorem.sentence().replace('.', '')
+        return species_name + ' ' + lorem.sentence().replace('.', '')
 
 # Print iterations progress
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
@@ -159,6 +162,26 @@ def create_numerical_board_to_print(new_board):
             
     return np.array(numerical_board)
 
+def greatest_divisor(number):
+    max_div = 0
+    for i in range(1, number - 1):
+        if number % i == 0:
+            max_div = i
+    if max_div > 1:
+        return max_div
+    else:
+        return number
+
+def all_divisors(number):
+    divisors = []
+    for i in range(1, number - 1):
+        if number % i == 0:
+            divisors.append(i)
+    if len(divisors) > 1:
+        return divisors[1:]
+    else:
+        return [number]
+
 class AiModule(object):
     """
     Class responsible for training the Neural Network, 
@@ -215,7 +238,7 @@ class AiModule(object):
         json.dump(population, codecs.open(path, 'w', encoding='utf-8'), separators=(',', ':'))
 
     
-    def genetic_learning(self, show_games = False, save_checkpoint = True):
+    def genetic_learning(self, show_games = False, save_checkpoint = True, tournament_type = 'tournament'):
         total_n_of_games = self.N_PLAYERS * (self.N_KIDS + 1) * (self.N_PLAYERS * (self.N_KIDS + 1) - 1)
 
         #learn_start_time = time.time()
@@ -224,8 +247,8 @@ class AiModule(object):
             current_players = []
             for player in self.players:
                 current_players.append(copy.deepcopy(player))
-                weights = player[0]
-                biases = player[1]
+                weights = copy.deepcopy(player[0])
+                biases = copy.deepcopy(player[1])
                 name = player[3]
                 for _ in range(self.N_KIDS):
                     new_weights, new_biases = shaper.evolve(weights, biases)
@@ -233,35 +256,83 @@ class AiModule(object):
             
             current_game = 0
             times = []
-            for player_index in range(len(current_players)):
-                for enemy_index in range(len(current_players)):
-                    if player_index != enemy_index:
-                        iteration_start = time.time()
-                        ########################################################
-                        player_white = self.get_model()
-                        player_white.set_weights(np.array(current_players[player_index][0]))
-                        player_black = self.get_model()
-                        player_black.set_weights(np.array(current_players[enemy_index][0]))
+            if tournament_type == 'allvsall':
+                for player_index in range(len(current_players)):
+                    for enemy_index in range(len(current_players)):
+                        if player_index != enemy_index:
+                            iteration_start = time.time()
+                            ########################################################
+                            player_white = self.get_model()
+                            player_white.set_weights(np.array(current_players[player_index][0]))
+                            player_black = self.get_model()
+                            player_black.set_weights(np.array(current_players[enemy_index][0]))
 
-                        winner, fitness, _ = self.play([player_white, player_black], show_game=False)
-                        if winner == 1:
-                            current_players[player_index][2] += fitness
-                        elif winner == 2:
-                            current_players[enemy_index][2] += fitness
-                        del player_white, player_black
-                        current_game += 1
-                        #########################################################
-                        times.append((time.time() - iteration_start)/60)
-                        approximated_wait_time = np.mean(np.array(times)) * (total_n_of_games - len(times))
-                        #printProgressBar(current_game,total_n_of_games, prefix = 'Progress:', suffix = 'Complete, approximated iteration time left: ' + "%.2f"%approximated_wait_time + ' min', length = 50)
-                print('finished player' + str(player_index) +  'approximated iteration time left: ' + "%.2f"%approximated_wait_time + ' min')
+                            winner, fitness, _ = self.play([player_white, player_black], show_game=False)
+                            if winner == 1:
+                                current_players[player_index][2] += fitness
+                            elif winner == 2:
+                                current_players[enemy_index][2] += fitness
+                            del player_white, player_black
+                            current_game += 1
+                            #########################################################
+                            times.append((time.time() - iteration_start)/60)
+                            random.shuffle(times)
+                            times = times[:6]
+                            approximated_wait_time = np.mean(np.array(times)) * (total_n_of_games - len(times))
+                            printProgressBar(current_game,total_n_of_games, prefix = 'Progress:', suffix = 'Complete, approximated iteration time left: ' + "%.2f"%approximated_wait_time + ' min', length = 50)
+                    #print('finished player' + str(player_index) +  'approximated iteration time left: ' + "%.2f"%approximated_wait_time + ' min')
+
+
+            elif tournament_type == 'tournament':
+                random.shuffle(current_players)
+                group_size = min(all_divisors(len(current_players)))
+                #n_groups = len(current_players)/group_size
+                players_indexes = list(range(len(current_players)))
+                print('tournament start')
+                while group_size > 1:
+                    group_index = 0
+                    future_players = []
+                    print([current_players[index][3] for index in players_indexes],players_indexes, group_size)
+                    tournament_iteration = 0
+                    for player_index in players_indexes:
+                        for enemy_index in players_indexes[group_size * group_index: group_size * (group_index + 1)]:
+                            if player_index != enemy_index:
+                                player_white = self.get_model()
+                                player_white.set_weights(np.array(current_players[player_index][0]))
+                                player_black = self.get_model()
+                                player_black.set_weights(np.array(current_players[enemy_index][0]))
+
+                                winner, fitness, _ = self.play([player_white, player_black], show_game=False)
+                                if winner == 1:
+                                    current_players[player_index][2] += fitness
+                                elif winner == 2:
+                                    current_players[enemy_index][2] += fitness
+                                del player_white, player_black
+                                print('group: ', group_index, ' white: ', player_index, ' black: ', enemy_index, 'winner: ', winner)
+
+
+                        if (tournament_iteration + 1) % group_size == 0:
+                            group_fitnesses = [current_players[index][2] for index in players_indexes[group_size * group_index: group_size * (group_index + 1)]]
+                            group_indexes = [index for index in players_indexes[group_size * group_index: group_size * (group_index + 1)]]
+                            future_players.append( group_indexes[group_fitnesses.index(max(group_fitnesses))])
+                            print('group: ', group_index, 'winner: ', future_players[-1])
+                            group_index += 1
+
+                        tournament_iteration += 1
+
+                    print('fitnesses: ', [current_players[index][2] for index in range(len(current_players))])
+                    group_size = min(all_divisors(len(future_players)))
+                    players_indexes =  copy.deepcopy(future_players)
+                    n_groups = len(players_indexes)/group_size                   
 
 
             players_sorted = [player for player in sorted(current_players, key = lambda x: x[2], reverse=True)]      
             self.players = copy.deepcopy(players_sorted[:self.N_PLAYERS])
-            print('iteration: ', iteration, 'winning fitness: ',self.players[0][2])
+            del players_sorted
+            del current_players
+            print('iteration: ', iteration, 'winning fitness and spiecies: ', self.players[0][3], self.players[0][2])
             for player_index in range(len(self.players)):
-                print(self.players[player_index][2])
+                print('survives: ', self.players[player_index][3], self.players[player_index][2])
                 self.players[player_index][2] = 0  
 
             if save_checkpoint:
@@ -271,8 +342,8 @@ class AiModule(object):
 
         
           
-training = AiModule(N_PLAYERS=10,N_KIDS = 4 ,N_OF_ITERATIONS=20)
-training.genetic_learning()
+training = AiModule(N_PLAYERS=4, N_KIDS = 2 ,N_OF_ITERATIONS=10)
+training.genetic_learning(tournament_type='tournament')
 
 
     
